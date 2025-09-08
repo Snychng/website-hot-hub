@@ -1,0 +1,40 @@
+name: Feishu Notification
+
+on:
+  push:
+    branches:
+      - main # 你可以根据需要更改分支名称
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        # 必须获取完整的提交历史才能进行比较
+        fetch-depth: 0
+
+    - name: Send Plain Text Notification to Feishu
+      env:
+        FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+      run: |
+        # 1. 提取出所有新增行的纯文本内容
+        CLEAN_CONTENT=$(git diff HEAD~1 HEAD | grep '^\+' | grep -v '+++' | sed 's/^+//')
+
+        # 2. 如果没有任何新增内容，则直接退出，不发送任何消息
+        if [ -z "$CLEAN_CONTENT" ]; then
+          echo "No new content added. Skipping notification."
+          exit 0
+        fi
+
+        # 3. 直接使用 curl 发送。
+        #    - 我们将飞书所需的最小 JSON 结构直接写在 -d 参数里。
+        #    - 为了防止 CLEAN_CONTENT 中的特殊字符（如引号）破坏 JSON 结构，
+        #      我们先将其中的特殊字符进行转义。
+        ESCAPED_CONTENT=$(echo "$CLEAN_CONTENT" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\n/\\n/g')
+
+        curl -X POST -H "Content-Type: application/json" \
+          -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"$ESCAPED_CONTENT\"}}" \
+          "$FEISHU_WEBHOOK_URL"
