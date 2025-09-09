@@ -3,8 +3,10 @@ name: schedule-update-and-notify
 on:
   workflow_dispatch:
   schedule:
-    # 每半小时执行一次 (在每小时的第 0 分钟和第 30 分钟)
-    - cron: "0,30 * * * *"
+    # 每天三次推送：早上9:30、中午12:00、下午17:30 (UTC时间，需要减8小时)
+    - cron: "30 1 * * *"   # 早上9:30 (UTC 1:30)
+    - cron: "0 4 * * *"    # 中午12:00 (UTC 4:00)
+    - cron: "30 9 * * *"   # 下午17:30 (UTC 9:30)
 
 jobs:
   build-and-notify:
@@ -77,6 +79,7 @@ jobs:
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           FEISHU_WEBHOOK_URL_TEST: ${{ secrets.FEISHU_WEBHOOK_URL_TEST }}
+          FEISHU_WEBHOOK_URL_CHANYAN: ${{ secrets.FEISHU_WEBHOOK_URL_CHANYAN }}
         run: |
           # 1. 定义一个函数，用于将 JSON 数组安全地转换为带序号的 Markdown 列表
           json_to_markdown_list() {
@@ -146,7 +149,7 @@ jobs:
           }')
 
           # 6. 循环遍历所有 webhook URL 并发送通知
-          for url in "$FEISHU_WEBHOOK_URL" "$FEISHU_WEBHOOK_URL_TEST"; do
+          for url in "$FEISHU_WEBHOOK_URL" "$FEISHU_WEBHOOK_URL_TEST" "$FEISHU_WEBHOOK_URL_CHANYAN"; do
             if [ -n "$url" ]; then
               echo "Sending notification to a webhook..."
               curl -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$url"
