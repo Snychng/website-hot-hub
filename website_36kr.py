@@ -11,7 +11,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from utils import current_date, current_time, logger, write_text_file
+from utils import current_date, current_time, logger, write_text_file, write_json_file
 
 url = "https://gateway.36kr.com/api/mis/nav/home/nav/rank/hot"
 
@@ -119,40 +119,38 @@ class WebSite36Kr:
     ) -> str:
         return f"# {date}\n\n共 {len(content)} 条\n\n{self.create_list(content)}"
 
-    def run(self, update_readme=True):
+    def run(self):
         dir_name = "36kr"
+        debug_print(f"开始抓取 {dir_name}", "36KR")
 
         raw_data = self.get_raw()
         cleaned_data = self.clean_raw(raw_data)
+        
+        # 如果抓取失败或没有新数据，提前返回
+        if not cleaned_data:
+            debug_print("没有抓取到新数据", "36KR")
+            return { "success": False }
 
         cur_date = current_date()
-        # 写入原始数据
         raw_path = f"./raw/{dir_name}/{cur_date}.json"
+
+        # 读取当天已有的数据进行合并
         already_download_data = self.read_already_download(raw_path)
         merged_data = self.merge_data(cleaned_data, already_download_data)
 
-        self.create_raw(raw_path, json.dumps(merged_data, ensure_ascii=False))
+        # 只写入纯净的 JSON 文件
+        write_json_file(raw_path, merged_data)
+        debug_print(f"数据已写入到 {raw_path}", "36KR")
 
-        # 更新 archive
-        archive_text = self.create_archive(merged_data, cur_date)
-        archive_path = f"./archives/{dir_name}/{cur_date}.md"
-        write_text_file(archive_path, archive_text)
-        
-        readme_content = self.create_list(merged_data)
-        
-        if update_readme:
-            readme_text = self.update_readme(merged_data)
-            readme_path = "./README.md"
-            write_text_file(readme_path, readme_text)
-            return True
-        else:
-            return {
-                "section_name": "36KR",
-                "content": readme_content,
-                "data_count": len(merged_data)
-            }
+        # 返回成功状态和数据，供 main.py 判断
+        return {
+            "success": True,
+            "data_count": len(merged_data)
+        }
 
 
 if __name__ == "__main__":
     website_36kr_obj = WebSite36Kr()
-    website_36kr_obj.run()
+    result = website_36kr_obj.run()
+    if result["success"]:
+        print(f"36Kr 热榜抓取成功，共 {result['data_count']} 条数据。")
