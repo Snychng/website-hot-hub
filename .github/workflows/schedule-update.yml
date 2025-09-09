@@ -54,7 +54,7 @@ jobs:
           git commit -m "update by github action"
           git push -u origin main
 
-      # 步骤 8: ✨ 使用 --arg 安全地构建并发送通知 ✨
+      # 步骤 8: 这个步骤的命令已经是正确的
       - name: Send Notifications to Multiple Feishu Bots
         if: steps.git-check.outputs.has_changes == 'true'
         env:
@@ -68,8 +68,7 @@ jobs:
           GITHUB_NEWS=$(echo "$CLEAN_CONTENT" | grep 'github.com' || true)
           UPDATE_TIME=$(date '+%Y年%m月%d日 %H:%M')
 
-          # 2. 使用 --arg 将所有数据作为参数安全地传递给 .jq 文件
-          #    这是最可靠的方式，可以处理任何多行或特殊字符。
+          # 2. 从外部通过 --arg 将参数传递给 .jq 文件
           JSON_PAYLOAD=$(jq -n -f .github/workflows/feishu_digest_card.jq \
             --arg time "$UPDATE_TIME" \
             --arg kr "$KR_NEWS" \
