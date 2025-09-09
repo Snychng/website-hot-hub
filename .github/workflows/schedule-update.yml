@@ -106,6 +106,10 @@ jobs:
           
           # 4. 在 Shell 中逐步、安全地构建 "elements" JSON 数组
           ELEMENTS_JSON="[$(jq -n --arg time "$UPDATE_TIME" '{"tag": "div", "text": {"tag": "lark_md", "content": ("**更新时间:** " + $time)}}')]"
+          
+          # 添加署名信息
+          SIGNATURE=$(jq -n '{"tag": "div", "text": {"tag": "lark_md", "content": "*Created by Snychng\'s Bot*"}}')
+          ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson signature "$SIGNATURE" '. + [$signature]')
 
           if [ -n "$KR_MD" ]; then
             SECTION=$(jq -n --arg content "$KR_MD" '[{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**36氪 | 热榜**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}]')
