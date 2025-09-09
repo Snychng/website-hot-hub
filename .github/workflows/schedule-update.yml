@@ -3,14 +3,13 @@ name: schedule-update-and-notify
 on:
   workflow_dispatch:
   schedule:
-    # 每小时整点执行
+    # 每半小时执行一次 (在每小时的第 0 分钟和第 30 分钟)
     - cron: "0,30 * * * *"
 
 jobs:
   build-and-notify:
     runs-on: ubuntu-latest
     
-    # 授予工作流对仓库内容的写入权限，以允许 git push
     permissions:
       contents: write
 
@@ -18,44 +17,34 @@ jobs:
       TZ: Asia/Shanghai
 
     steps:
-      # 步骤 1: 克隆仓库
+      # 步骤 1-5: 与之前版本完全相同，负责准备环境和运行脚本
       - name: Clone repo
         uses: actions/checkout@v4
         with:
-          # 必须获取完整的提交历史，才能在后续步骤中比较差异 (git diff)
           fetch-depth: 0
-
-      # 步骤 2: 配置Python环境
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: 'pip'
-
-      # 步骤 3: 安装Python依赖
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      # 步骤 4: 配置Git用户信息
       - name: Config git
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git pull --rebase
-
-      # 步骤 5: 运行Python脚本以生成或更新文件
       - name: Run python script
         run: python -u main.py
         env:
           ENABLE_DEBUG_PRINT: true
 
-      # 步骤 6: 检查是否有文件变动，并设置一个输出变量
+      # 步骤 6-7: 与之前版本完全相同，负责检查变动并提交
       - name: Check for file changes
         id: git-check
         run: |
-          # 检查工作区与上次提交之间是否有差异
           if ! git diff-index --quiet HEAD; then
             echo "Changes detected."
             echo "has_changes=true" >> $GITHUB_OUTPUT
@@ -63,9 +52,6 @@ jobs:
             echo "No changes to commit."
             echo "has_changes=false" >> $GITHUB_OUTPUT
           fi
-
-      # 步骤 7: 提交并推送变更
-      # 仅在检测到有文件变动时才执行此步骤
       - name: Commit and push changes
         if: steps.git-check.outputs.has_changes == 'true'
         run: |
@@ -73,26 +59,87 @@ jobs:
           git commit -m "update by github action"
           git push -u origin main
 
-      # 步骤 8: 发送飞书通知
-      # 仅在检测到有文件变动时才执行此步骤
-      - name: Send Feishu Notification
+      # 步骤 8: ✨ 发送带跳转按钮的“热榜简报”飞书通知 ✨
+      - name: Send Interactive News Digest to Feishu
         if: steps.git-check.outputs.has_changes == 'true'
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
         run: |
-          # 提取出最新一次提交中所有新增行的纯文本内容
-          CLEAN_CONTENT=$(git diff HEAD~1 HEAD | grep '^\+' | grep -v '+++' | sed 's/^+//')
+          # 1. 获取最新提交的新增内容，并进行清理
+          CLEAN_CONTENT=$(git diff HEAD~1 HEAD | grep '^\+' | grep -v '+++' | grep -v '<!--' | grep -v '^$+' | sed 's/^+//')
 
-          # 如果没有任何新增内容 (例如，提交只包含删除)，则不发送通知
-          if [ -z "$CLEAN_CONTENT" ]; then
-            echo "Commit contains no new content. Skipping notification."
-            exit 0
-          fi
+          # 2. 按新的平台来源提取新闻
+          KR_NEWS=$(echo "$CLEAN_CONTENT" | grep '36kr.com' || true)
+          JUEJIN_NEWS=$(echo "$CLEAN_CONTENT" | grep 'juejin.cn' || true)
+          GITHUB_NEWS=$(echo "$CLEAN_CONTENT" | grep 'github.com' || true)
 
-          # 使用 jq 安全地构建 JSON payload，确保内容中的特殊字符被正确处理
-          JSON_PAYLOAD=$(jq -n --arg text "$CLEAN_CONTENT" '{msg_type: "text", content: {text: $text}}')
+          # 3. 获取当前时间
+          UPDATE_TIME=$(date '+%Y年%m月%d日 %H:%M')
 
-          # 发送最终构建好的、格式正确的 JSON payload
+          # 4. 使用 jq 动态构建带按钮的消息卡片
+          JSON_PAYLOAD=$(jq -n \
+            --arg time "$UPDATE_TIME" \
+            --arg kr "$KR_NEWS" \
+            --arg juejin "$JUEJIN_NEWS" \
+            --arg github "$GITHUB_NEWS" \
+            '
+            # 定义一个函数，用于生成单个来源的新闻模块
+            def section(title; content):
+              if ($content | length > 0) then
+                [
+                  {"tag": "hr"},
+                  {"tag": "div", "text": {"tag": "lark_md", "content": "**" + title + "**"}},
+                  {"tag": "div", "text": {"tag": "lark_md", "content": $content}}
+                ]
+              else
+                []
+              end;
+
+            {
+              "msg_type": "interactive",
+              "card": {
+                "config": { "wide_screen_mode": true },
+                "header": {
+                  "title": { "tag": "plain_text", "content": "📰 每日热榜简报" },
+                  "template": "blue"
+                },
+                "elements": [
+                  {"tag": "div", "text": {"tag": "lark_md", "content": ("**更新时间:** " + $time)}}
+                ] +
+                section("36氪 | 热榜"; $kr) +
+                section("掘金 | 热榜"; $juejin) +
+                section("GitHub | Trending"; $github) +
+                [
+                  {"tag": "hr"},
+                  {
+                    "tag": "action",
+                    "actions": [
+                      {
+                        "tag": "button",
+                        "text": { "tag": "plain_text", "content": "前往 36氪" },
+                        "type": "default",
+                        "url": "https://36kr.com/"
+                      },
+                      {
+                        "tag": "button",
+                        "text": { "tag": "plain_text", "content": "前往 掘金" },
+                        "type": "default",
+                        "url": "https://juejin.cn/hot"
+                      },
+                      {
+                        "tag": "button",
+                        "text": { "tag": "plain_text", "content": "前往 GitHub" },
+                        "type": "default",
+                        "url": "https://github.com/trending"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+            ')
+
+          # 5. 发送最终构建好的 JSON payload
           curl -X POST -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD" \
             "$FEISHU_WEBHOOK_URL"
