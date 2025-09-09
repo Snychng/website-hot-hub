@@ -3,7 +3,7 @@ name: schedule-update-and-notify
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0,30 * * * *"
+    - cron: "0,45 * * * *"
 
 jobs:
   build-and-notify:
@@ -30,7 +30,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: Config git
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.email "github-actions[bot]@users.noreply.com"
           git config --local user.name "github-actions[bot]"
           git pull --rebase
       - name: Run python script
@@ -54,8 +54,8 @@ jobs:
           git commit -m "update by github action"
           git push -u origin main
 
-      # 步骤 8: 这个步骤的命令已经是正确的
-      - name: Send Notifications to Multiple Feishu Bots
+      # 步骤 8: ✨ 在 Shell 中构建并发送最终的通知 ✨
+      - name: Build and Send Notifications to Multiple Feishu Bots
         if: steps.git-check.outputs.has_changes == 'true'
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
@@ -68,14 +68,40 @@ jobs:
           GITHUB_NEWS=$(echo "$CLEAN_CONTENT" | grep 'github.com' || true)
           UPDATE_TIME=$(date '+%Y年%m月%d日 %H:%M')
 
-          # 2. 从外部通过 --arg 将参数传递给 .jq 文件
-          JSON_PAYLOAD=$(jq -n -f .github/workflows/feishu_digest_card.jq \
-            --arg time "$UPDATE_TIME" \
-            --arg kr "$KR_NEWS" \
-            --arg juejin "$JUEJIN_NEWS" \
-            --arg github "$GITHUB_NEWS")
+          # 2. 在 Shell 中逐步构建 "elements" JSON 数组
+          #    这是本次修正的核心：将所有条件逻辑放在 Shell 中
+          ELEMENTS_JSON="[$(jq -n --arg time "$UPDATE_TIME" '{"tag": "div", "text": {"tag": "lark_md", "content": ("**更新时间:** " + $time)}}')]"
 
-          # 3. 循环遍历所有 webhook URL 并发送通知
+          if [ -n "$KR_NEWS" ]; then
+            SECTION=$(jq -n --arg content "$KR_NEWS" '[{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**36氪 | 热榜**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}]')
+            ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson section "$SECTION" '. + $section')
+          fi
+
+          if [ -n "$JUEJIN_NEWS" ]; then
+            SECTION=$(jq -n --arg content "$JUEJIN_NEWS" '[{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**掘金 | 热榜**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}]')
+            ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson section "$SECTION" '. + $section')
+          fi
+
+          if [ -n "$GITHUB_NEWS" ]; then
+            SECTION=$(jq -n --arg content "$GITHUB_NEWS" '[{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**GitHub | Trending**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}]')
+            ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson section "$SECTION" '. + $section')
+          fi
+
+          BUTTONS_JSON='[{"tag": "hr"}, {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "前往 36氪"}, "type": "default", "url": "https://36kr.com/"}, {"tag": "button", "text": {"tag": "plain_text", "content": "前往 掘金"}, "type": "default", "url": "https://juejin.cn/hot"}, {"tag": "button", "text": {"tag": "plain_text", "content": "前往 GitHub"}, "type": "default", "url": "https://github.com/trending"}]}]'
+          ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson buttons "$BUTTONS_JSON" '. + $buttons')
+
+          # 3. 使用一个极其简单的 jq 模板，将构建好的 elements 数组注入
+          JSON_PAYLOAD=$(jq -n --argjson elements "$ELEMENTS_JSON" \
+          '{
+            "msg_type": "interactive",
+            "card": {
+              "config": { "wide_screen_mode": true },
+              "header": { "title": { "tag": "plain_text", "content": "📰 每日热榜简报" }, "template": "blue" },
+              "elements": $elements
+            }
+          }')
+
+          # 4. 循环遍历所有 webhook URL 并发送通知
           for url in "$FEISHU_WEBHOOK_URL" "$FEISHU_WEBHOOK_URL_TEST"; do
             if [ -n "$url" ]; then
               echo "Sending notification to a webhook..."
