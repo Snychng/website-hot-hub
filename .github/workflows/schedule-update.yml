@@ -54,23 +54,27 @@ jobs:
           git commit -m "update by github action"
           git push -u origin main
 
-      # 步骤 8: ✨ 从独立文件构建并发送通知 ✨
+      # 步骤 8: ✨ 使用 --arg 安全地构建并发送通知 ✨
       - name: Send Notifications to Multiple Feishu Bots
         if: steps.git-check.outputs.has_changes == 'true'
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           FEISHU_WEBHOOK_URL_TEST: ${{ secrets.FEISHU_WEBHOOK_URL_TEST }}
         run: |
-          # 1. 提取和准备所有需要的数据，并导出为环境变量
-          export CLEAN_CONTENT=$(git diff HEAD~1 HEAD | grep '^\+' | grep -v '+++' | grep -v '<!--' | grep -v '^$+' | sed 's/^+//')
-          export KR_NEWS=$(echo "$CLEAN_CONTENT" | grep '36kr.com' || true)
-          export JUEJIN_NEWS=$(echo "$CLEAN_CONTENT" | grep 'juejin.cn' || true)
-          export GITHUB_NEWS=$(echo "$CLEAN_CONTENT" | grep 'github.com' || true)
-          export UPDATE_TIME=$(date '+%Y年%m月%d日 %H:%M')
+          # 1. 提取和准备所有需要的数据
+          CLEAN_CONTENT=$(git diff HEAD~1 HEAD | grep '^\+' | grep -v '+++' | grep -v '<!--' | grep -v '^$+' | sed 's/^+//')
+          KR_NEWS=$(echo "$CLEAN_CONTENT" | grep '36kr.com' || true)
+          JUEJIN_NEWS=$(echo "$CLEAN_CONTENT" | grep 'juejin.cn' || true)
+          GITHUB_NEWS=$(echo "$CLEAN_CONTENT" | grep 'github.com' || true)
+          UPDATE_TIME=$(date '+%Y年%m月%d日 %H:%M')
 
-          # 2. 从 .jq 文件执行 jq 脚本来生成 payload.json
-          #    这是本次修正的核心：jq 从文件读取指令，完全避免了 shell 的解析问题。
-          JSON_PAYLOAD=$(jq -n -f .github/workflows/feishu_digest_card.jq)
+          # 2. 使用 --arg 将所有数据作为参数安全地传递给 .jq 文件
+          #    这是最可靠的方式，可以处理任何多行或特殊字符。
+          JSON_PAYLOAD=$(jq -n -f .github/workflows/feishu_digest_card.jq \
+            --arg time "$UPDATE_TIME" \
+            --arg kr "$KR_NEWS" \
+            --arg juejin "$JUEJIN_NEWS" \
+            --arg github "$GITHUB_NEWS")
 
           # 3. 循环遍历所有 webhook URL 并发送通知
           for url in "$FEISHU_WEBHOOK_URL" "$FEISHU_WEBHOOK_URL_TEST"; do
