@@ -1,6 +1,6 @@
 # website-hot-hub
 
-记录 36Kr、bilibili、GitHub、抖音、掘金、微信读书、快手平台从 2023-10-25 日至今的热点榜。每小时抓取一次数据，按天[归档](archives)。
+记录 36Kr、掘金、GitHub从 2023-10-25 日至今的热点榜。每小时抓取一次数据，按天[归档](archives)。
 
 ## 36Kr
 
