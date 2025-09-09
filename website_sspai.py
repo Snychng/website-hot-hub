@@ -2,7 +2,6 @@
 import contextlib
 import json
 import pathlib
-import re
 import typing
 from itertools import chain
 
@@ -10,7 +9,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from utils import current_date, current_time, logger, write_text_file
+from utils import current_date, debug_print, logger, write_json_file
 
 url = "https://sspai.com/api/v1/article/tag/page/get?limit=50&tag=热门文章"
 
@@ -70,23 +69,7 @@ class WebSiteSSPai:
                 content = json.loads(fd.read())
         return content
 
-    @staticmethod
-    def create_list(content: typing.List[typing.Dict[str, typing.Any]]) -> str:
-        topics = []
-        template = """<!-- BEGIN SSPAI -->
-<!-- 最后更新时间 {update_time} -->
-{topics}
-<!-- END SSPAI -->"""
 
-        for item in content:
-            topics.append(f"1. [{item['title']}]({item['url']})")
-        template = template.replace("{update_time}", current_time())
-        template = template.replace("{topics}", "\n".join(topics))
-        return template
-
-    @staticmethod
-    def create_raw(full_path: str, raw: str) -> None:
-        write_text_file(full_path, raw)
 
     @staticmethod
     def merge_data(
@@ -99,54 +82,40 @@ class WebSiteSSPai:
 
         return [{"url": k, "title": v} for k, v in merged_dict.items()]
 
-    def update_readme(self, content: typing.List[typing.Dict[str, typing.Any]]) -> str:
-        with open("./README.md", "r") as fd:
-            readme = fd.read()
-            return re.sub(
-                r"<!-- BEGIN SSPAI -->[\W\w]*<!-- END SSPAI -->",
-                self.create_list(content),
-                readme,
-            )
 
-    def create_archive(
-        self, content: typing.List[typing.Dict[str, typing.Any]], date: str
-    ) -> str:
-        return f"# {date}\n\n共 {len(content)} 条\n\n{self.create_list(content)}"
 
-    def run(self, update_readme=True):
+    def run(self):
         dir_name = "sspai"
+        debug_print(f"开始抓取 {dir_name}", "SSPAI")
 
         raw_data = self.get_raw()
         cleaned_data = self.clean_raw(raw_data)
+        
+        # 如果抓取失败或没有新数据，提前返回
+        if not cleaned_data:
+            debug_print("没有抓取到新数据", "SSPAI")
+            return { "success": False }
 
         cur_date = current_date()
-        # 写入原始数据
         raw_path = f"./raw/{dir_name}/{cur_date}.json"
+
+        # 读取当天已有的数据进行合并
         already_download_data = self.read_already_download(raw_path)
         merged_data = self.merge_data(cleaned_data, already_download_data)
 
-        self.create_raw(raw_path, json.dumps(merged_data, ensure_ascii=False))
+        # 只写入纯净的 JSON 文件
+        write_json_file(raw_path, merged_data)
+        debug_print(f"数据已写入到 {raw_path}", "SSPAI")
 
-        # 更新 archive
-        archive_text = self.create_archive(merged_data, cur_date)
-        archive_path = f"./archives/{dir_name}/{cur_date}.md"
-        write_text_file(archive_path, archive_text)
-        
-        readme_content = self.create_list(merged_data)
-        
-        if update_readme:
-            readme_text = self.update_readme(merged_data)
-            readme_path = "./README.md"
-            write_text_file(readme_path, readme_text)
-            return True
-        else:
-            return {
-                "section_name": "SSPAI",
-                "content": readme_content,
-                "data_count": len(merged_data)
-            }
+        # 返回成功状态和数据，供 main.py 判断
+        return {
+            "success": True,
+            "data_count": len(merged_data)
+        }
 
 
 if __name__ == "__main__":
     sspai_obj = WebSiteSSPai()
-    sspai_obj.run()
+    result = sspai_obj.run()
+    if result["success"]:
+        print(f"SSPai 热榜抓取成功，共 {result['data_count']} 条数据。")

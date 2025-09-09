@@ -5,6 +5,7 @@ import time
 from website_36kr import WebSite36Kr
 from website_github import WebSiteGitHub
 from website_juejin import WebSiteJueJin
+from website_sspai import WebSiteSSPai
 from utils import debug_print
 
 def run_website_task(website_obj, website_name):
@@ -28,6 +29,7 @@ def main():
         (WebSite36Kr(), "36KR"),
         (WebSiteGitHub(), "GITHUB"),
         (WebSiteJueJin(), "JUEJIN"),
+        (WebSiteSSPai(), "SSPAI"),
     ]
 
     successful_tasks = 0

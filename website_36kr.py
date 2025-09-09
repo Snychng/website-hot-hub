@@ -11,7 +11,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from utils import current_date, current_time, logger, write_text_file, write_json_file
+from utils import current_date, current_time, debug_print, logger, write_text_file, write_json_file
 
 url = "https://gateway.36kr.com/api/mis/nav/home/nav/rank/hot"
 
