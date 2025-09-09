@@ -17,7 +17,7 @@ jobs:
       TZ: Asia/Shanghai
 
     steps:
-      # 步骤 1-5: 与之前版本完全相同，负责准备环境和运行脚本
+      # 步骤 1-7: 与之前版本完全相同，负责准备、运行、检查和提交
       - name: Clone repo
         uses: actions/checkout@v4
         with:
@@ -40,8 +40,6 @@ jobs:
         run: python -u main.py
         env:
           ENABLE_DEBUG_PRINT: true
-
-      # 步骤 6-7: 与之前版本完全相同，负责检查变动并提交
       - name: Check for file changes
         id: git-check
         run: |
@@ -59,87 +57,38 @@ jobs:
           git commit -m "update by github action"
           git push -u origin main
 
-      # 步骤 8: ✨ 发送带跳转按钮的“热榜简报”飞书通知 ✨
-      - name: Send Interactive News Digest to Feishu
+      # 步骤 8: ✨ 将美化后的消息发送给多个飞书机器人 ✨
+      - name: Send Notifications to Multiple Feishu Bots
         if: steps.git-check.outputs.has_changes == 'true'
+        # 将两个 webhook URL 都引入到环境变量中
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          FEISHU_WEBHOOK_URL_TEST: ${{ secrets.FEISHU_WEBHOOK_URL_TEST }}
         run: |
-          # 1. 获取最新提交的新增内容，并进行清理
+          # 1. 提取和准备所有需要的数据 (和之前一样)
           CLEAN_CONTENT=$(git diff HEAD~1 HEAD | grep '^\+' | grep -v '+++' | grep -v '<!--' | grep -v '^$+' | sed 's/^+//')
-
-          # 2. 按新的平台来源提取新闻
           KR_NEWS=$(echo "$CLEAN_CONTENT" | grep '36kr.com' || true)
           JUEJIN_NEWS=$(echo "$CLEAN_CONTENT" | grep 'juejin.cn' || true)
           GITHUB_NEWS=$(echo "$CLEAN_CONTENT" | grep 'github.com' || true)
-
-          # 3. 获取当前时间
           UPDATE_TIME=$(date '+%Y年%m月%d日 %H:%M')
 
-          # 4. 使用 jq 动态构建带按钮的消息卡片
+          # 2. 构建一次 JSON Payload (和之前一样)
           JSON_PAYLOAD=$(jq -n \
-            --arg time "$UPDATE_TIME" \
-            --arg kr "$KR_NEWS" \
-            --arg juejin "$JUEJIN_NEWS" \
-            --arg github "$GITHUB_NEWS" \
+            --arg time "$UPDATE_TIME" --arg kr "$KR_NEWS" --arg juejin "$JUEJIN_NEWS" --arg github "$GITHUB_NEWS" \
             '
-            # 定义一个函数，用于生成单个来源的新闻模块
-            def section(title; content):
-              if ($content | length > 0) then
-                [
-                  {"tag": "hr"},
-                  {"tag": "div", "text": {"tag": "lark_md", "content": "**" + title + "**"}},
-                  {"tag": "div", "text": {"tag": "lark_md", "content": $content}}
-                ]
-              else
-                []
-              end;
-
-            {
-              "msg_type": "interactive",
-              "card": {
-                "config": { "wide_screen_mode": true },
-                "header": {
-                  "title": { "tag": "plain_text", "content": "📰 每日热榜简报" },
-                  "template": "blue"
-                },
-                "elements": [
-                  {"tag": "div", "text": {"tag": "lark_md", "content": ("**更新时间:** " + $time)}}
-                ] +
-                section("36氪 | 热榜"; $kr) +
-                section("掘金 | 热榜"; $juejin) +
-                section("GitHub | Trending"; $github) +
-                [
-                  {"tag": "hr"},
-                  {
-                    "tag": "action",
-                    "actions": [
-                      {
-                        "tag": "button",
-                        "text": { "tag": "plain_text", "content": "前往 36氪" },
-                        "type": "default",
-                        "url": "https://36kr.com/"
-                      },
-                      {
-                        "tag": "button",
-                        "text": { "tag": "plain_text", "content": "前往 掘金" },
-                        "type": "default",
-                        "url": "https://juejin.cn/hot"
-                      },
-                      {
-                        "tag": "button",
-                        "text": { "tag": "plain_text", "content": "前往 GitHub" },
-                        "type": "default",
-                        "url": "https://github.com/trending"
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
+            def section(title; content): if ($content | length > 0) then [{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**" + title + "**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}] else [] end;
+            {"msg_type": "interactive", "card": {"config": {"wide_screen_mode": true}, "header": {"title": {"tag": "plain_text", "content": "📰 每日热榜简报"}, "template": "blue"}, "elements": [{"tag": "div", "text": {"tag": "lark_md", "content": ("**更新时间:** " + $time)}}] + section("36氪 | 热榜"; $kr) + section("掘金 | 热榜"; $juejin) + section("GitHub | Trending"; $github) + [{"tag": "hr"}, {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "前往 36氪"}, "type": "default", "url": "https://36kr.com/"}, {"tag": "button", "text": {"tag": "plain_text", "content": "前往 掘金"}, "type": "default", "url": "https://juejin.cn/hot"}, {"tag": "button", "text": {"tag": "plain_text", "content": "前往 GitHub"}, "type": "default", "url": "https://github.com/trending"}]}]}}
             ')
-
-          # 5. 发送最终构建好的 JSON payload
-          curl -X POST -H "Content-Type: application/json" \
-            -d "$JSON_PAYLOAD" \
-            "$FEISHU_WEBHOOK_URL"
+          
+          # 3. 循环遍历所有 webhook URL 并发送通知
+          for url in "$FEISHU_WEBHOOK_URL" "$FEISHU_WEBHOOK_URL_TEST"; do
+            # 检查 webhook URL 是否为空 (如果某个 secret 未设置)
+            if [ -n "$url" ]; then
+              echo "Sending notification to a webhook..."
+              curl -X POST -H "Content-Type: application/json" \
+                -d "$JSON_PAYLOAD" \
+                "$url"
+            else
+              echo "Skipping an empty webhook URL."
+            fi
+          done
