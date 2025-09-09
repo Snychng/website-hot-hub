@@ -1,12 +1,7 @@
 # .github/workflows/feishu_digest_card.jq
 
-# 接收从命令行传入的参数
---arg time ""
---arg kr ""
---arg juejin ""
---arg github ""
-
 # 定义一个函数，用于生成单个来源的新闻模块
+# 脚本本身只使用变量 ($time, $kr 等)，这些变量由外部的 --arg 命令提供
 def section(title; content):
   if ($content | length > 0) then
     [
@@ -18,6 +13,7 @@ def section(title; content):
     []
   end;
 
+# 构建最终的 JSON 结构
 {
   "msg_type": "interactive",
   "card": {
