@@ -3,40 +3,55 @@ name: schedule-update-and-notify
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0,45 * * * *"
+    # 每半小时执行一次 (在每小时的第 0 分钟和第 30 分钟)
+    - cron: "0,30 * * * *"
 
 jobs:
   build-and-notify:
     runs-on: ubuntu-latest
+    
+    # 授予工作流对仓库内容的写入权限，以允许 git push
     permissions:
       contents: write
+
     env:
       TZ: Asia/Shanghai
 
     steps:
-      # 步骤 1-7: 保持不变
+      # 步骤 1: 克隆仓库
       - name: Clone repo
         uses: actions/checkout@v4
         with:
+          # 必须获取完整的提交历史，才能在后续步骤中读取上一个commit的文件
           fetch-depth: 0
+
+      # 步骤 2: 配置Python环境
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: 'pip'
+
+      # 步骤 3: 安装Python依赖
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      # 步骤 4: 配置Git用户信息
       - name: Config git
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.com"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git pull --rebase
+
+      # 步骤 5: 运行Python脚本以生成或更新独立的JSON文件
       - name: Run python script
         run: python -u main.py
         env:
           ENABLE_DEBUG_PRINT: true
+
+      # 步骤 6: 检查是否有文件变动，并设置一个输出变量
       - name: Check for file changes
         id: git-check
         run: |
@@ -47,6 +62,8 @@ jobs:
             echo "No changes to commit."
             echo "has_changes=false" >> $GITHUB_OUTPUT
           fi
+
+      # 步骤 7: 提交并推送变更
       - name: Commit and push changes
         if: steps.git-check.outputs.has_changes == 'true'
         run: |
@@ -54,43 +71,59 @@ jobs:
           git commit -m "update by github action"
           git push -u origin main
 
-      # 步骤 8: ✨ 在 Shell 中构建并发送最终的通知 ✨
-      - name: Build and Send Notifications to Multiple Feishu Bots
+      # 步骤 8: ✨ 从独立的JSON文件构建并发送美化后的飞书通知 ✨
+      - name: Build and Send Notifications from JSON Files
         if: steps.git-check.outputs.has_changes == 'true'
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           FEISHU_WEBHOOK_URL_TEST: ${{ secrets.FEISHU_WEBHOOK_URL_TEST }}
         run: |
-          # 1. 提取和准备所有需要的数据
-          CLEAN_CONTENT=$(git diff HEAD~1 HEAD | grep '^\+' | grep -v '+++' | grep -v '<!--' | grep -v '^$+' | sed 's/^+//')
-          KR_NEWS=$(echo "$CLEAN_CONTENT" | grep '36kr.com' || true)
-          JUEJIN_NEWS=$(echo "$CLEAN_CONTENT" | grep 'juejin.cn' || true)
-          GITHUB_NEWS=$(echo "$CLEAN_CONTENT" | grep 'github.com' || true)
+          # 1. 定义一个函数，用于将 JSON 数组安全地转换为带序号的 Markdown 列表
+          json_to_markdown_list() {
+              # 使用 jq:
+              # -s (--slurp) 读取所有输入形成一个数组
+              # -r (--raw-output) 输出原始文本，而不是带引号的JSON字符串
+              # [0] | if . then ... else "" end: 安全地处理空输入
+              # to_entries | .[]: 将数组转换为 [key, value] 对象并遍历
+              # "\(.key + 1). [\(.value.title)](\(.value.url))": 格式化为 Markdown
+              jq -sr '[.[] | to_entries | .[] | "\(.key + 1). [\(.value.title)](\(.value.url))"] | join("\n")'
+          }
+
+          # 2. 从 git HEAD (最新提交) 中直接读取当天的 JSON 文件内容
+          #    "2>/dev/null || echo '[]'" 是一个安全措施，如果文件不存在（例如脚本失败），则返回一个空的JSON数组
+          CURRENT_DATE=$(date +%Y-%m-%d)
+          KR_JSON=$(git show HEAD:./raw/36kr/$CURRENT_DATE.json 2>/dev/null || echo "[]")
+          JUEJIN_JSON=$(git show HEAD:./raw/juejin/$CURRENT_DATE.json 2>/dev/null || echo "[]")
+          GITHUB_JSON=$(git show HEAD:./raw/github/$CURRENT_DATE.json 2>/dev/null || echo "[]")
           UPDATE_TIME=$(date '+%Y年%m月%d日 %H:%M')
 
-          # 2. 在 Shell 中逐步构建 "elements" JSON 数组
-          #    这是本次修正的核心：将所有条件逻辑放在 Shell 中
+          # 3. 将每个平台的 JSON 转换为格式正确的 Markdown 列表
+          KR_MD=$(echo "$KR_JSON" | json_to_markdown_list)
+          JUEJIN_MD=$(echo "$JUEJIN_JSON" | json_to_markdown_list)
+          GITHUB_MD=$(echo "$GITHUB_JSON" | json_to_markdown_list)
+          
+          # 4. 在 Shell 中逐步、安全地构建 "elements" JSON 数组
           ELEMENTS_JSON="[$(jq -n --arg time "$UPDATE_TIME" '{"tag": "div", "text": {"tag": "lark_md", "content": ("**更新时间:** " + $time)}}')]"
 
-          if [ -n "$KR_NEWS" ]; then
-            SECTION=$(jq -n --arg content "$KR_NEWS" '[{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**36氪 | 热榜**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}]')
+          if [ -n "$KR_MD" ]; then
+            SECTION=$(jq -n --arg content "$KR_MD" '[{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**36氪 | 热榜**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}]')
             ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson section "$SECTION" '. + $section')
           fi
 
-          if [ -n "$JUEJIN_NEWS" ]; then
-            SECTION=$(jq -n --arg content "$JUEJIN_NEWS" '[{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**掘金 | 热榜**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}]')
+          if [ -n "$JUEJIN_MD" ]; then
+            SECTION=$(jq -n --arg content "$JUEJIN_MD" '[{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**掘金 | 热榜**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}]')
             ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson section "$SECTION" '. + $section')
           fi
 
-          if [ -n "$GITHUB_NEWS" ]; then
-            SECTION=$(jq -n --arg content "$GITHUB_NEWS" '[{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**GitHub | Trending**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}]')
+          if [ -n "$GITHUB_MD" ]; then
+            SECTION=$(jq -n --arg content "$GITHUB_MD" '[{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**GitHub | Trending**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}]')
             ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson section "$SECTION" '. + $section')
           fi
 
           BUTTONS_JSON='[{"tag": "hr"}, {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "前往 36氪"}, "type": "default", "url": "https://36kr.com/"}, {"tag": "button", "text": {"tag": "plain_text", "content": "前往 掘金"}, "type": "default", "url": "https://juejin.cn/hot"}, {"tag": "button", "text": {"tag": "plain_text", "content": "前往 GitHub"}, "type": "default", "url": "https://github.com/trending"}]}]'
           ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson buttons "$BUTTONS_JSON" '. + $buttons')
 
-          # 3. 使用一个极其简单的 jq 模板，将构建好的 elements 数组注入
+          # 5. 使用最终的模板，将构建好的 elements 数组安全地注入
           JSON_PAYLOAD=$(jq -n --argjson elements "$ELEMENTS_JSON" \
           '{
             "msg_type": "interactive",
@@ -101,7 +134,7 @@ jobs:
             }
           }')
 
-          # 4. 循环遍历所有 webhook URL 并发送通知
+          # 6. 循环遍历所有 webhook URL 并发送通知
           for url in "$FEISHU_WEBHOOK_URL" "$FEISHU_WEBHOOK_URL_TEST"; do
             if [ -n "$url" ]; then
               echo "Sending notification to a webhook..."
