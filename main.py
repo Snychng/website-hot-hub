@@ -3,14 +3,14 @@
 import concurrent.futures
 import time
 
-from website_sspai import WebSiteSSPai
+# from website_sspai import WebSiteSSPai
 from website_36kr import WebSite36Kr
-from website_bilibili import WebSiteBilibili
+# from website_bilibili import WebSiteBilibili
 from website_github import WebSiteGitHub
-from website_douyin import WebSiteDouYin
+# from website_douyin import WebSiteDouYin
 from website_juejin import WebSiteJueJin
-from website_weread import WebSiteWeRead
-from website_kuaishou import WebSiteKuaiShou
+# from website_weread import WebSiteWeRead
+# from website_kuaishou import WebSiteKuaiShou
 from utils import debug_print, batch_update_readme
 
 
@@ -105,14 +105,14 @@ def main():
     debug_print("开始执行所有网站任务")
 
     all_websites = [
-        (WebSiteSSPai(), "SSPAI"),
+        # (WebSiteSSPai(), "SSPAI"),
         (WebSite36Kr(), "36KR"),
-        (WebSiteBilibili(), "BILIBILI"),
+        # (WebSiteBilibili(), "BILIBILI"),
         (WebSiteGitHub(), "GITHUB"),
-        (WebSiteDouYin(), "DOUYIN"),
+        # (WebSiteDouYin(), "DOUYIN"),
         (WebSiteJueJin(), "JUEJIN"),
-        (WebSiteWeRead(), "WEREAD"),
-        (WebSiteKuaiShou(), "KUAISHOU"),
+        # (WebSiteWeRead(), "WEREAD"),
+        # (WebSiteKuaiShou(), "KUAISHOU"),
     ]
 
     timeout_seconds = 60  # 每轮任务最多执行1分钟
@@ -151,22 +151,22 @@ def main():
 
             for website_obj, website_name in all_websites:
                 if website_name in failed_website_names:
-                    if website_name == "SSPAI":
-                        websites_to_run.append((WebSiteSSPai(), website_name))
-                    elif website_name == "36KR":
+                    # if website_name == "SSPAI":
+                    #     websites_to_run.append((WebSiteSSPai(), website_name))
+                    if website_name == "36KR":
                         websites_to_run.append((WebSite36Kr(), website_name))
-                    elif website_name == "BILIBILI":
-                        websites_to_run.append((WebSiteBilibili(), website_name))
+                    # elif website_name == "BILIBILI":
+                    #     websites_to_run.append((WebSiteBilibili(), website_name))
                     elif website_name == "GITHUB":
                         websites_to_run.append((WebSiteGitHub(), website_name))
-                    elif website_name == "DOUYIN":
-                        websites_to_run.append((WebSiteDouYin(), website_name))
+                    # elif website_name == "DOUYIN":
+                    #     websites_to_run.append((WebSiteDouYin(), website_name))
                     elif website_name == "JUEJIN":
                         websites_to_run.append((WebSiteJueJin(), website_name))
-                    elif website_name == "WEREAD":
-                        websites_to_run.append((WebSiteWeRead(), website_name))
-                    elif website_name == "KUAISHOU":
-                        websites_to_run.append((WebSiteKuaiShou(), website_name))
+                    # elif website_name == "WEREAD":
+                    #     websites_to_run.append((WebSiteWeRead(), website_name))
+                    # elif website_name == "KUAISHOU":
+                    #     websites_to_run.append((WebSiteKuaiShou(), website_name))
                         
             debug_print(f"准备重试 {len(websites_to_run)} 个任务")
         else:
