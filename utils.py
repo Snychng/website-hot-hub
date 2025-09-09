@@ -130,3 +130,10 @@ def batch_update_readme(updates: dict) -> None:
             os.remove(readme_path + ".tmp")
         except:
             pass
+def write_json_file(full_path: str, data: list) -> None:
+    """将列表数据作为纯净的JSON数组写入文件"""
+    ensure_dir(full_path)
+    # 使用 ensure_ascii=False 来正确处理中文字符
+    content = json.dumps(data, ensure_ascii=False, indent=2)
+    with open(full_path, "w", encoding='utf-8') as f:
+        f.write(content)
