@@ -1,5 +1,11 @@
 # .github/workflows/feishu_digest_card.jq
 
+# 接收从命令行传入的参数
+--arg time ""
+--arg kr ""
+--arg juejin ""
+--arg github ""
+
 # 定义一个函数，用于生成单个来源的新闻模块
 def section(title; content):
   if ($content | length > 0) then
@@ -21,11 +27,11 @@ def section(title; content):
       "template": "blue"
     },
     "elements": [
-      {"tag": "div", "text": {"tag": "lark_md", "content": ("**更新时间:** " + $ENV.UPDATE_TIME)}}
+      {"tag": "div", "text": {"tag": "lark_md", "content": ("**更新时间:** " + $time)}}
     ] +
-    section("36氪 | 热榜"; $ENV.KR_NEWS) +
-    section("掘金 | 热榜"; $ENV.JUEJIN_NEWS) +
-    section("GitHub | Trending"; $ENV.GITHUB_NEWS) +
+    section("36氪 | 热榜"; $kr) +
+    section("掘金 | 热榜"; $juejin) +
+    section("GitHub | Trending"; $github) +
     [
       {"tag": "hr"},
       {
