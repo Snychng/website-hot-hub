@@ -1,11 +1,3 @@
-好的，没问题。
-
-为一个有序的、可扩展的项目编写一份清晰的 README.md 至关重要。这份 README 将详细解释您项目的目标、架构、工作流程，并为后续的开发者提供一份清晰的“如何新增一个热榜来源”的指南。
-
-您可以直接将以下内容复制并替换您仓库中的 `README.md` 文件。
-
----
-
 # Website Hot Hub - 自动化热榜聚合器
 
 [![GitHub Actions Workflow Status](https://github.com/Snychng/website-hot-hub/actions/workflows/schedule-update.yml/badge.svg)](https://github.com/Snychng/website-hot-hub/actions/workflows/schedule-update.yml)
