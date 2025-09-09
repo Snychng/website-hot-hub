@@ -108,7 +108,7 @@ jobs:
           ELEMENTS_JSON="[$(jq -n --arg time "$UPDATE_TIME" '{"tag": "div", "text": {"tag": "lark_md", "content": ("**更新时间:** " + $time)}}')]"
           
           # 添加署名信息
-          SIGNATURE=$(jq -n '{"tag": "div", "text": {"tag": "lark_md", "content": "*Created by Snychng\'s Bot*"}}')
+          SIGNATURE=$(jq -n '{"tag": "div", "text": {"tag": "lark_md", "content": "*Created by 予成Bot*"}}')
           ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson signature "$SIGNATURE" '. + [$signature]')
 
           if [ -n "$KR_MD" ]; then
