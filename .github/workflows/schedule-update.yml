@@ -72,8 +72,9 @@ jobs:
           git push -u origin main
 
       # 步骤 8: ✨ 从独立的JSON文件构建并发送美化后的飞书通知 ✨
+      # 注释：无论是否有代码更新都发送webhook消息，确保定时通知正常运行
       - name: Build and Send Notifications from JSON Files
-        if: steps.git-check.outputs.has_changes == 'true'
+        # if: steps.git-check.outputs.has_changes == 'true'  # 已注释：移除条件限制，每次执行都发送通知
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           FEISHU_WEBHOOK_URL_TEST: ${{ secrets.FEISHU_WEBHOOK_URL_TEST }}
