@@ -91,13 +91,13 @@ jobs:
               jq -sr '[.[] | to_entries | .[] | "\(.key + 1). [\(.value.title)](\(.value.url))"] | join("\n")'
           }
 
-          # 2. 从 git HEAD (最新提交) 中直接读取当天的 JSON 文件内容
+          # 2. 从工作区中直接读取当天的 JSON 文件内容（而不是从git HEAD读取）
           #    "2>/dev/null || echo '[]'" 是一个安全措施，如果文件不存在（例如脚本失败），则返回一个空的JSON数组
           CURRENT_DATE=$(date +%Y-%m-%d)
-          KR_JSON=$(git show HEAD:./raw/36kr/$CURRENT_DATE.json 2>/dev/null || echo "[]")
-          JUEJIN_JSON=$(git show HEAD:./raw/juejin/$CURRENT_DATE.json 2>/dev/null || echo "[]")
-          GITHUB_JSON=$(git show HEAD:./raw/github/$CURRENT_DATE.json 2>/dev/null || echo "[]")
-          SSPAI_JSON=$(git show HEAD:./raw/sspai/$CURRENT_DATE.json 2>/dev/null || echo "[]")
+          KR_JSON=$(cat ./raw/36kr/$CURRENT_DATE.json 2>/dev/null || echo "[]")
+          JUEJIN_JSON=$(cat ./raw/juejin/$CURRENT_DATE.json 2>/dev/null || echo "[]")
+          GITHUB_JSON=$(cat ./raw/github/$CURRENT_DATE.json 2>/dev/null || echo "[]")
+          SSPAI_JSON=$(cat ./raw/sspai/$CURRENT_DATE.json 2>/dev/null || echo "[]")
           UPDATE_TIME=$(date '+%Y年%m月%d日 %H:%M')
 
           # 3. 将每个平台的 JSON 转换为格式正确的 Markdown 列表
