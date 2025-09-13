@@ -97,14 +97,12 @@ jobs:
           KR_JSON=$(cat ./raw/36kr/$CURRENT_DATE.json 2>/dev/null || echo "[]")
           JUEJIN_JSON=$(cat ./raw/juejin/$CURRENT_DATE.json 2>/dev/null || echo "[]")
           GITHUB_JSON=$(cat ./raw/github/$CURRENT_DATE.json 2>/dev/null || echo "[]")
-          SSPAI_JSON=$(cat ./raw/sspai/$CURRENT_DATE.json 2>/dev/null || echo "[]")
           UPDATE_TIME=$(date '+%Y年%m月%d日 %H:%M')
 
           # 3. 将每个平台的 JSON 转换为格式正确的 Markdown 列表
           KR_MD=$(echo "$KR_JSON" | json_to_markdown_list)
           JUEJIN_MD=$(echo "$JUEJIN_JSON" | json_to_markdown_list)
           GITHUB_MD=$(echo "$GITHUB_JSON" | json_to_markdown_list)
-          SSPAI_MD=$(echo "$SSPAI_JSON" | json_to_markdown_list)
           
           # 4. 在 Shell 中逐步、安全地构建 "elements" JSON 数组
           ELEMENTS_JSON="[$(jq -n --arg time "$UPDATE_TIME" '{"tag": "div", "text": {"tag": "lark_md", "content": ("**更新时间:** " + $time)}}')]"
@@ -128,12 +126,9 @@ jobs:
             ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson section "$SECTION" '. + $section')
           fi
 
-          if [ -n "$SSPAI_MD" ]; then
-            SECTION=$(jq -n --arg content "$SSPAI_MD" '[{"tag": "hr"}, {"tag": "div", "text": {"tag": "lark_md", "content": "**少数派 | 热榜**"}}, {"tag": "div", "text": {"tag": "lark_md", "content": $content}}]')
-            ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson section "$SECTION" '. + $section')
-          fi
 
-          BUTTONS_JSON='[{"tag": "hr"}, {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "前往 36氪"}, "type": "default", "url": "https://36kr.com/"}, {"tag": "button", "text": {"tag": "plain_text", "content": "前往 掘金"}, "type": "default", "url": "https://juejin.cn/hot"}, {"tag": "button", "text": {"tag": "plain_text", "content": "前往 GitHub"}, "type": "default", "url": "https://github.com/trending"}, {"tag": "button", "text": {"tag": "plain_text", "content": "前往 少数派"}, "type": "default", "url": "https://sspai.com/"}]}]'
+
+          BUTTONS_JSON='[{"tag": "hr"}, {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "前往 36氪"}, "type": "primary", "url": "https://36kr.com/"}, {"tag": "button", "text": {"tag": "plain_text", "content": "前往 掘金"}, "type": "primary", "url": "https://juejin.cn/hot"}, {"tag": "button", "text": {"tag": "plain_text", "content": "前往 GitHub"}, "type": "primary", "url": "https://github.com/trending"}]}]'
           ELEMENTS_JSON=$(echo "$ELEMENTS_JSON" | jq --argjson buttons "$BUTTONS_JSON" '. + $buttons')
 
           # 5. 使用最终的模板，将构建好的 elements 数组安全地注入
