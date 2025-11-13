@@ -97,12 +97,23 @@ jobs:
           KR_JSON=$(cat ./raw/36kr/$CURRENT_DATE.json 2>/dev/null || echo "[]")
           JUEJIN_JSON=$(cat ./raw/juejin/$CURRENT_DATE.json 2>/dev/null || echo "[]")
           GITHUB_JSON=$(cat ./raw/github/$CURRENT_DATE.json 2>/dev/null || echo "[]")
+          PREV_KR_JSON=$(git show HEAD~1:./raw/36kr/$CURRENT_DATE.json 2>/dev/null || echo "[]")
+          PREV_JUEJIN_JSON=$(git show HEAD~1:./raw/juejin/$CURRENT_DATE.json 2>/dev/null || echo "[]")
+          PREV_GITHUB_JSON=$(git show HEAD~1:./raw/github/$CURRENT_DATE.json 2>/dev/null || echo "[]")
+          KR_NEW=$(echo "$KR_JSON" | jq --argjson prev "$PREV_KR_JSON" '[.[] | select(.url as $u | ($prev | map(.url) | index($u) | not))]')
+          JUEJIN_NEW=$(echo "$JUEJIN_JSON" | jq --argjson prev "$PREV_JUEJIN_JSON" '[.[] | select(.url as $u | ($prev | map(.url) | index($u) | not))]')
+          GITHUB_NEW=$(echo "$GITHUB_JSON" | jq --argjson prev "$PREV_GITHUB_JSON" '[.[] | select(.url as $u | ($prev | map(.url) | index($u) | not))]')
           UPDATE_TIME=$(date '+%Y年%m月%d日 %H:%M')
 
           # 3. 将每个平台的 JSON 转换为格式正确的 Markdown 列表
-          KR_MD=$(echo "$KR_JSON" | json_to_markdown_list)
-          JUEJIN_MD=$(echo "$JUEJIN_JSON" | json_to_markdown_list)
-          GITHUB_MD=$(echo "$GITHUB_JSON" | json_to_markdown_list)
+          KR_MD=$(echo "$KR_NEW" | json_to_markdown_list)
+          JUEJIN_MD=$(echo "$JUEJIN_NEW" | json_to_markdown_list)
+          GITHUB_MD=$(echo "$GITHUB_NEW" | json_to_markdown_list)
+
+          if [ -z "$KR_MD$JUEJIN_MD$GITHUB_MD" ]; then
+            echo "No incremental updates today. Skipping Feishu notification."
+            exit 0
+          fi
           
           # 4. 在 Shell 中逐步、安全地构建 "elements" JSON 数组
           ELEMENTS_JSON="[$(jq -n --arg time "$UPDATE_TIME" '{"tag": "div", "text": {"tag": "lark_md", "content": ("**更新时间:** " + $time)}}')]"
