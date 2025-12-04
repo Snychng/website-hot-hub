@@ -3,8 +3,8 @@ name: schedule-update-and-notify
 on:
   workflow_dispatch:
   schedule:
-    # 从早上8:30开始每4小时触发一次 (UTC时间，需要减8小时)
-    - cron: "30 0,4,8,12 * * *"   # 北京时间 8:30, 12:30, 16:30, 20:30
+    # 北京时间每天早上 8:30 (UTC时间 0:30)
+    - cron: "30 0 * * *"
 
 jobs:
   build-and-notify:
